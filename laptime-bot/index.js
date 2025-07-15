@@ -167,26 +167,51 @@ bot.hears('📆 Результаты по дням', (ctx) => {
   ctx.reply(text);
 });
 
-bot.hears('🏆 Рейтинг', (ctx) => {
-  const bestLaps = [];
-
-  for (const [num, lapsList] of Object.entries(session.times || {})) {
-    if (lapsList.length > 0) {
-      const best = Math.min(...lapsList);
-      bestLaps.push({ number: num, time: best });
-    }
+bot.hears('🏆 Рейтинг лучших кругов', (ctx) => {
+  if (!session.times || !session.dates || session.dates.length === 0) {
+    return ctx.reply('❗ Нет данных или дат.');
   }
 
-  if (bestLaps.length === 0) {
-    return ctx.reply('❗ Нет зафиксированных кругов.');
+  const driverRankings = [];
+
+  for (const [num, laps] of Object.entries(session.times)) {
+    if (!laps || laps.length === 0) continue;
+
+    const best = Math.min(...laps);
+    const bestIndex = laps.findIndex(t => t === best);
+    const total = laps.length;
+
+    const sessionIndex = Math.floor(bestIndex / 14) + 1;
+    const sessionLap = bestIndex % 14 + 1;
+    const dayIndex = Math.floor(bestIndex / 14); // 0-based
+    const date = session.dates[dayIndex] || '—';
+
+    driverRankings.push({
+      number: num,
+      bestTime: best,
+      bestFormatted: formatTime(best),
+      session: sessionIndex,
+      lap: sessionLap,
+      date,
+      total,
+    });
   }
 
-  bestLaps.sort((a, b) => a.time - b.time);
+  if (driverRankings.length === 0) {
+    return ctx.reply('❗ Нет результатов.');
+  }
 
-  let text = '🏆 Рейтинг лучших кругов:\n\n';
-  bestLaps.forEach((entry, index) => {
-    text += `${index + 1}. №${entry.number} — ${formatTime(entry.time)}\n`;
-  });
+  driverRankings.sort((a, b) => a.bestTime - b.bestTime);
+
+  const medals = ['🥇', '🥈', '🥉'];
+
+  const text = '🏆 Рейтинг лучших кругов:\n\n' +
+    driverRankings.map((d, i) =>
+      `${medals[i] || `${i + 1}.`} №${d.number}: ${d.bestFormatted} (${d.date}, сессия ${d.session}, круг ${d.lap}) — всего ${d.total} кругов`
+    ).join('\n');
+
+  ctx.reply(text);
+});
 
   ctx.reply(text);
 });
