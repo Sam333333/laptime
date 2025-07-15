@@ -98,12 +98,29 @@ bot.hears('🏁 Завершить сессию', (ctx) => {
 });
 
 bot.hears('📊 Результаты по сессиям', (ctx) => {
-  let text = '📊 Результаты по сессиям:\n';
+  const lines = [];
+
   for (const [num, lapsList] of Object.entries(session.times || {})) {
-    const times = lapsList.map(formatTime).join(', ');
-    text += `• №${num}: ${times || '—'}\n`;
+    if (!lapsList || lapsList.length === 0) continue;
+
+    const bestTime = Math.min(...lapsList);
+    const bestIndex = lapsList.findIndex(t => t === bestTime) + 1;
+    const formattedBest = `🥇 ${formatTime(bestTime)} (круг ${bestIndex})`;
+
+    const otherLaps = lapsList
+      .map((t, i) => ({ t, i }))
+      .filter(({ t }) => t !== bestTime)
+      .map(({ t, i }) => `${formatTime(t)} (круг ${i + 1})`);
+
+    const line = `• №${num}: ${formattedBest}${otherLaps.length ? ' | ' + otherLaps.join(' | ') : ''}`;
+    lines.push(line);
   }
-  ctx.reply(text || 'Нет данных.');
+
+  if (lines.length === 0) {
+    return ctx.reply('❗ Нет зафиксированных кругов.');
+  }
+
+  ctx.reply('📊 Результаты по сессиям:\n\n' + lines.join('\n'));
 });
 
 bot.hears('📆 Результаты по дням', (ctx) => {
