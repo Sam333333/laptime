@@ -98,7 +98,7 @@ bot.hears('🏁 Завершить сессию', (ctx) => {
 });
 
 bot.hears('📊 Результаты по сессиям', (ctx) => {
-  const lines = [];
+  const driverData = [];
 
   for (const [num, lapsList] of Object.entries(session.times || {})) {
     if (!lapsList || lapsList.length === 0) continue;
@@ -113,14 +113,20 @@ bot.hears('📊 Результаты по сессиям', (ctx) => {
       .map(({ t, i }) => `${formatTime(t)} (круг ${i + 1})`);
 
     const line = `• №${num}: ${formattedBest}${otherLaps.length ? ' | ' + otherLaps.join(' | ') : ''}`;
-    lines.push(line);
+
+    driverData.push({ number: num, best: bestTime, line });
   }
 
-  if (lines.length === 0) {
+  if (driverData.length === 0) {
     return ctx.reply('❗ Нет зафиксированных кругов.');
   }
 
-  ctx.reply('📊 Результаты по сессиям:\n\n' + lines.join('\n'));
+  driverData.sort((a, b) => a.best - b.best);
+
+  const message = '📊 Результаты по сессиям (от быстрого к медленному):\n\n' +
+    driverData.map(d => d.line).join('\n');
+
+  ctx.reply(message);
 });
 
 bot.hears('📆 Результаты по дням', (ctx) => {
