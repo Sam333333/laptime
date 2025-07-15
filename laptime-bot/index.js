@@ -1,3 +1,4 @@
+
 const { Telegraf, Markup } = require('telegraf');
 const moment = require('moment-timezone');
 
@@ -42,162 +43,92 @@ bot.hears('🚦 Начать сессию', (ctx) => {
   ]).resize());
 });
 
-tracks.forEach(track => {
-  bot.hears(track, (ctx) => {
-    session.active = true;
-    session.track = track;
-    session.date = moment().tz('Europe/Moscow').format('YYYY-MM-DD HH:mm');
-    session.times = {};
-    session.lastStart = {};
-    drivers.forEach(n => {
-      session.times[n] = [];
-      session.lastStart[n] = null;
-    });
+bot.hears(tracks, (ctx) => {
+  const selectedTrack = ctx.message.text;
+  session.active = true;
+  session.track = selectedTrack;
+  session.date = moment().tz("Europe/Moscow").format("YYYY-MM-DD HH:mm:ss");
+  session.times = {};
+  session.lastStart = {};
+  ctx.reply(`Трасса: ${selectedTrack}\nДата: ${session.date}`, Markup.keyboard([
+    ['99', '101', '49'],
+    ['57', '97', '34'],
+    ['50', '45', '111'],
+    ['◀️ Назад']
+  ]).resize());
+});
 
-    ctx.reply(
-      `🏁 Сессия началась!\n📍 Трасса: ${track}\n📅 Дата: ${session.date}\n\n🔘 Нажмите номер гонщика, чтобы начать/завершить круг:`,
-      Markup.keyboard([
-        ['99', '101', '49'],
-        ['57', '97', '34'],
-        ['50', '45', '111'],
-        ['🏁 Завершить сессию', '◀️ Назад']
-      ]).resize()
-    );
+drivers.forEach(driver => {
+  bot.hears(driver, (ctx) => {
+    const now = moment();
+    const last = session.lastStart[driver];
+    if (!last) {
+      session.lastStart[driver] = now;
+      ctx.reply(`🚦 Старт круга для гонщика ${driver}`);
+    } else {
+      const duration = moment.duration(now.diff(last));
+      const formatted = `${Math.floor(duration.asMinutes())}:${(duration.seconds()).toString().padStart(2, '0')}.${duration.milliseconds().toString().padStart(3, '0')}`;
+      session.lastStart[driver] = null;
+      if (!session.times[driver]) session.times[driver] = [];
+      session.times[driver].push(formatted);
+      ctx.reply(`🏁 Круг завершён для ${driver}: ${formatted}`);
+    }
   });
 });
 
-bot.hears(drivers, (ctx) => {
-  if (!session.active) {
-    return ctx.reply('❗ Сначала начните сессию.', Markup.keyboard([
-      ['🚦 Начать сессию']
-    ]).resize());
-  }
+bot.hears('📊 Результаты по сессиям', (ctx) => {
+  if (!session.active) return ctx.reply('Нет активной сессии.');
+  const table = Object.entries(session.times)
+    .filter(([_, laps]) => laps.length > 0)
+    .map(([driver, laps]) => {
+      const best = laps.reduce((a, b) => a < b ? a : b);
+      const bestIndex = laps.indexOf(best) + 1;
+      return { driver, best, bestIndex };
+    })
+    .sort((a, b) => a.best.localeCompare(b.best))
+    .map((row, index) => `${index === 0 ? '🥇' : ''} ${row.driver}: ${row.best} (Круг ${row.bestIndex})`)
+    .join('\n');
 
-  const driver = ctx.message.text;
-  const now = Date.now();
+  ctx.reply(`📊 Результаты по сессиям:\n${table}`);
+});
 
-  if (!session.lastStart[driver]) {
-    session.lastStart[driver] = now;
-    ctx.reply(`⏱ Старт круга для №${driver}`);
-  } else {
-    const lapTime = now - session.lastStart[driver];
-    session.lastStart[driver] = null;
-    session.times[driver].push(lapTime);
-    const formatted = formatTime(lapTime);
-    ctx.reply(`✅ Круг завершён для №${driver}: ${formatted}`);
-  }
+bot.hears('📆 Результаты по дням', (ctx) => {
+  if (!session.active) return ctx.reply('Нет данных по дням.');
+  const table = Object.entries(session.times)
+    .filter(([_, laps]) => laps.length > 0)
+    .map(([driver, laps]) => {
+      const best = laps.reduce((a, b) => a < b ? a : b);
+      return `${driver} — лучший круг: ${best} (📅 ${session.date})`;
+    })
+    .join('\n');
+
+  ctx.reply(`📆 Результаты по дням:\n${table}`);
 });
 
 bot.hears('🏁 Завершить сессию', (ctx) => {
   session.active = false;
-  ctx.reply('🛑 Сессия завершена. Данные сохранены.', Markup.keyboard([
-    ['🚦 Начать сессию'],
-    ['📊 Результаты по сессиям', '📆 Результаты по дням'],
-    ['🏆 Рейтинг']
-  ]).resize());
-});
-
-bot.hears('📊 Результаты по сессиям', (ctx) => {
-  const driverData = [];
-
-  for (const [num, lapsList] of Object.entries(session.times || {})) {
-    if (!lapsList || lapsList.length === 0) continue;
-
-    const bestTime = Math.min(...lapsList);
-    const bestIndex = lapsList.findIndex(t => t === bestTime) + 1;
-    const formattedBest = `🥇 ${formatTime(bestTime)} (круг ${bestIndex})`;
-
-    const otherLaps = lapsList
-      .map((t, i) => ({ t, i }))
-      .filter(({ t }) => t !== bestTime)
-      .map(({ t, i }) => `${formatTime(t)} (круг ${i + 1})`);
-
-    const line = `• №${num}: ${formattedBest}${otherLaps.length ? ' | ' + otherLaps.join(' | ') : ''}`;
-
-    driverData.push({ number: num, best: bestTime, line });
-  }
-
-  if (driverData.length === 0) {
-    return ctx.reply('❗ Нет зафиксированных кругов.');
-  }
-
-  driverData.sort((a, b) => a.best - b.best);
-
-  const message = '📊 Результаты по сессиям (от быстрого к медленному):\n\n' +
-    driverData.map(d => d.line).join('\n');
-
-  ctx.reply(message);
-});
-
-bot.hears('📆 Результаты по дням', (ctx) => {
-  if (!session.date || !session.times) {
-    return ctx.reply('❗ Сессии ещё не проводились.');
-  }
-
-  let text = `📆 Результаты по дням:\nДата: ${session.date}\nТрасса: ${session.track || '—'}\n\n`;
-
-  const driversWithTimes = [];
-
-  for (const [num, lapsList] of Object.entries(session.times)) {
-    if (!lapsList || lapsList.length === 0) continue;
-
-    const best = Math.min(...lapsList);
-    const bestIndex = lapsList.findIndex(t => t === best);
-    const bestLap = bestIndex + 1;
-    const total = lapsList.length;
-
-    const sessionIndex = Math.floor(bestIndex / 14) + 1;
-    const sessionLap = bestLap - ((sessionIndex - 1) * 14);
-
-    driversWithTimes.push({
-      number: num,
-      bestTime: best,
-      line: `• №${num}: 🥇 ${formatTime(best)} (сессия ${sessionIndex}, круг ${sessionLap}) — всего ${total} кругов`
-    });
-  }
-
-  if (driversWithTimes.length === 0) {
-    return ctx.reply('❗ Нет сохранённых результатов.');
-  }
-  ctx.reply(text || 'Нет данных.');
-
-  driversWithTimes.sort((a, b) => a.bestTime - b.bestTime);
-
-  text += driversWithTimes.map(d => d.line).join('\n');
-
-  ctx.reply(text);
+  ctx.reply('Сессия завершена ✅. Данные сохранены.');
 });
 
 bot.hears('🏆 Рейтинг', (ctx) => {
-  const bestLaps = [];
+  const points = {
+    '99': 102,
+    '101': 98,
+    '49': 85,
+    '57': 80,
+    '97': 75,
+    '34': 72,
+    '50': 68,
+    '45': 60,
+    '111': 50
+  };
 
-  for (const [num, lapsList] of Object.entries(session.times || {})) {
-    if (lapsList.length > 0) {
-      const best = Math.min(...lapsList);
-      bestLaps.push({ number: num, time: best });
-    }
-  }
+  const sorted = Object.entries(points)
+    .sort((a, b) => b[1] - a[1])
+    .map(([driver, pts], i) => `${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : ''} ${driver} — ${pts} очков`)
+    .join('\n');
 
-  if (bestLaps.length === 0) {
-    return ctx.reply('❗ Нет зафиксированных кругов.');
-  }
-
-  bestLaps.sort((a, b) => a.time - b.time);
-
-  let text = '🏆 Рейтинг лучших кругов:\n\n';
-  bestLaps.forEach((entry, index) => {
-    text += `${index + 1}. №${entry.number} — ${formatTime(entry.time)}\n`;
-  });
-
-  ctx.reply(text);
+  ctx.reply(`🏆 Рейтинг гонщиков:\n${sorted}`);
 });
 
-function formatTime(ms) {
-  const minutes = Math.floor(ms / 60000);
-  const seconds = Math.floor((ms % 60000) / 1000);
-  const milliseconds = ms % 1000;
-  return `${minutes}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
-}
-
 bot.launch();
-console.log('🤖 Бот запущен!');
