@@ -130,12 +130,41 @@ bot.hears('📊 Результаты по сессиям', (ctx) => {
 });
 
 bot.hears('📆 Результаты по дням', (ctx) => {
-  let text = '📆 Лучшие круги по гонщикам:\n';
-  for (const [num, lapsList] of Object.entries(session.times || {})) {
-    const best = lapsList.length ? formatTime(Math.min(...lapsList)) : '—';
-    text += `• №${num}: ${best}\n`;
+  if (!session.date || !session.times) {
+    return ctx.reply('❗ Сессии ещё не проводились.');
   }
-  ctx.reply(text || 'Нет данных.');
+
+  let text = `📆 Результаты по дням:\nДата: ${session.date}\nТрасса: ${session.track || '—'}\n\n`;
+
+  const driversWithTimes = [];
+
+  for (const [num, lapsList] of Object.entries(session.times)) {
+    if (!lapsList || lapsList.length === 0) continue;
+
+    const best = Math.min(...lapsList);
+    const bestIndex = lapsList.findIndex(t => t === best);
+    const bestLap = bestIndex + 1;
+    const total = lapsList.length;
+
+    const sessionIndex = Math.floor(bestIndex / 14) + 1;
+    const sessionLap = bestLap - ((sessionIndex - 1) * 14);
+
+    driversWithTimes.push({
+      number: num,
+      bestTime: best,
+      line: `• №${num}: 🥇 ${formatTime(best)} (сессия ${sessionIndex}, круг ${sessionLap}) — всего ${total} кругов`
+    });
+  }
+
+  if (driversWithTimes.length === 0) {
+    return ctx.reply('❗ Нет сохранённых результатов.');
+  }
+
+  driversWithTimes.sort((a, b) => a.bestTime - b.bestTime);
+
+  text += driversWithTimes.map(d => d.line).join('\n');
+
+  ctx.reply(text);
 });
 
 bot.hears('🏆 Рейтинг', (ctx) => {
