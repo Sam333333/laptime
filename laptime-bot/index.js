@@ -98,11 +98,25 @@ bot.hears('🏁 Завершить сессию', (ctx) => {
 });
 
 bot.hears('📊 Результаты по сессиям', (ctx) => {
-  let text = '📊 Результаты по сессиям:\n';
-  for (const [num, lapsList] of Object.entries(session.times || {})) {
-    const times = lapsList.map(formatTime).join(', ');
-    text += `• №${num}: ${times || '—'}\n`;
+  let text = `📊 Лучшие круги гонщиков по сессии ${session.track} — ${session.date}\n\n`;
+  const bestLaps = [];
+
+  for (const [num, laps] of Object.entries(session.times || {})) {
+    if (laps.length > 0) {
+      const bestTime = Math.min(...laps);
+      const bestIndex = laps.indexOf(bestTime) + 1;
+      bestLaps.push({ num, time: bestTime, lap: bestIndex });
+    }
   }
+
+  bestLaps.sort((a, b) => a.time - b.time);
+
+  bestLaps.forEach((driver, i) => {
+    const medal = i === 0 ? '🥇' : '';
+    const formatted = formatTime(driver.time);
+    text += `${medal} №${driver.num}: ${formatted} (Круг ${driver.lap})\n`;
+  });
+
   ctx.reply(text || 'Нет данных.');
 });
 
