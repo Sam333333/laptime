@@ -98,24 +98,25 @@ bot.hears('🏁 Завершить сессию', (ctx) => {
 });
 
 bot.hears('📊 Результаты по сессиям', (ctx) => {
-  let text = `📊 Лучшие круги гонщиков по сессии ${session.track} — ${session.date}\n\n`;
-  const bestLaps = [];
+  let text = `📊 Все круги по сессии ${session.track} — ${session.date}\n\n`;
 
   for (const [num, laps] of Object.entries(session.times || {})) {
-    if (laps.length > 0) {
-      const bestTime = Math.min(...laps);
-      const bestIndex = laps.indexOf(bestTime) + 1;
-      bestLaps.push({ num, time: bestTime, lap: bestIndex });
-    }
+    if (laps.length === 0) continue;
+
+    const bestTime = Math.min(...laps);
+    const bestIndex = laps.indexOf(bestTime) + 1;
+
+    text += `🏎 №${num}\n`;
+    text += `🥇 Лучший круг: ${formatTime(bestTime)} (Круг ${bestIndex})\n`;
+    text += `Все круги:\n`;
+
+    laps.forEach((time, index) => {
+      const lapLabel = index + 1 === bestIndex ? '⭐' : '  ';
+      text += `${lapLabel} Круг ${index + 1}: ${formatTime(time)}\n`;
+    });
+
+    text += `\n`;
   }
-
-  bestLaps.sort((a, b) => a.time - b.time);
-
-  bestLaps.forEach((driver, i) => {
-    const medal = i === 0 ? '🥇' : '';
-    const formatted = formatTime(driver.time);
-    text += `${medal} №${driver.num}: ${formatted} (Круг ${driver.lap})\n`;
-  });
 
   ctx.reply(text || 'Нет данных.');
 });
