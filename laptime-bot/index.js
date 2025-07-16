@@ -22,14 +22,16 @@ let session = {
 bot.start((ctx) => {
   ctx.reply('Добро пожаловать! Выберите действие:', Markup.keyboard([
     ['🚦 Начать сессию'],
-    ['📊 Результаты по сессиям', '📆 Результаты по дням']
+    ['📊 Результаты по сессиям', '📆 Результаты по дням'],
+    ['🏆 Рейтинг']
   ]).resize());
 });
 
 bot.hears('◀️ Назад', (ctx) => {
   ctx.reply('Главное меню:', Markup.keyboard([
     ['🚦 Начать сессию'],
-    ['📊 Результаты по сессиям', '📆 Результаты по дням']
+    ['📊 Результаты по сессиям', '📆 Результаты по дням'],
+    ['🏆 Рейтинг']
   ]).resize());
 });
 
@@ -53,7 +55,7 @@ tracks.forEach(track => {
     });
 
     ctx.reply(
-      🏁 Сессия началась!\n📍 Трасса: ${track}\n📅 Дата: ${session.date}\n\n🔘 Нажмите номер гонщика, чтобы начать/завершить круг:,
+      `🏁 Сессия началась!\n📍 Трасса: ${track}\n📅 Дата: ${session.date}\n\n🔘 Нажмите номер гонщика, чтобы начать/завершить круг:`,
       Markup.keyboard([
         ['99', '101', '49'],
         ['57', '97', '34'],
@@ -76,13 +78,13 @@ bot.hears(drivers, (ctx) => {
 
   if (!session.lastStart[driver]) {
     session.lastStart[driver] = now;
-    ctx.reply(⏱ Старт круга для №${driver});
+    ctx.reply(`⏱ Старт круга для №${driver}`);
   } else {
     const lapTime = now - session.lastStart[driver];
     session.lastStart[driver] = null;
     session.times[driver].push(lapTime);
     const formatted = formatTime(lapTime);
-    ctx.reply(✅ Круг завершён для №${driver}: ${formatted});
+    ctx.reply(`✅ Круг завершён для №${driver}: ${formatted}`);
   }
 });
 
@@ -90,7 +92,8 @@ bot.hears('🏁 Завершить сессию', (ctx) => {
   session.active = false;
   ctx.reply('🛑 Сессия завершена. Данные сохранены.', Markup.keyboard([
     ['🚦 Начать сессию'],
-    ['📊 Результаты по сессиям', '📆 Результаты по дням']
+    ['📊 Результаты по сессиям', '📆 Результаты по дням'],
+    ['🏆 Рейтинг']
   ]).resize());
 });
 
@@ -98,7 +101,7 @@ bot.hears('📊 Результаты по сессиям', (ctx) => {
   let text = '📊 Результаты по сессиям:\n';
   for (const [num, lapsList] of Object.entries(session.times || {})) {
     const times = lapsList.map(formatTime).join(', ');
-    text += • №${num}: ${times || '—'}\n;
+    text += `• №${num}: ${times || '—'}\n`;
   }
   ctx.reply(text || 'Нет данных.');
 });
@@ -107,16 +110,40 @@ bot.hears('📆 Результаты по дням', (ctx) => {
   let text = '📆 Лучшие круги по гонщикам:\n';
   for (const [num, lapsList] of Object.entries(session.times || {})) {
     const best = lapsList.length ? formatTime(Math.min(...lapsList)) : '—';
-    text += • №${num}: ${best}\n;
+    text += `• №${num}: ${best}\n`;
   }
   ctx.reply(text || 'Нет данных.');
+});
+
+bot.hears('🏆 Рейтинг', (ctx) => {
+  const bestLaps = [];
+
+  for (const [num, lapsList] of Object.entries(session.times || {})) {
+    if (lapsList.length > 0) {
+      const best = Math.min(...lapsList);
+      bestLaps.push({ number: num, time: best });
+    }
+  }
+
+  if (bestLaps.length === 0) {
+    return ctx.reply('❗ Нет зафиксированных кругов.');
+  }
+
+  bestLaps.sort((a, b) => a.time - b.time);
+
+  let text = '🏆 Рейтинг лучших кругов:\n\n';
+  bestLaps.forEach((entry, index) => {
+    text += `${index + 1}. №${entry.number} — ${formatTime(entry.time)}\n`;
+  });
+
+  ctx.reply(text);
 });
 
 function formatTime(ms) {
   const minutes = Math.floor(ms / 60000);
   const seconds = Math.floor((ms % 60000) / 1000);
   const milliseconds = ms % 1000;
-  return ${minutes}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')};
+  return `${minutes}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
 }
 
 bot.launch();
